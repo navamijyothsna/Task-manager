@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple CRUD App</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background: #1e293b;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            border: 1px solid #334155;
+            height: fit-content;
+        }
+        h2 {
+            margin-top: 0;
+            color: #f8fafc;
+            text-align: center;
+            font-weight: 600;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input[type="text"], input[type="date"] {
+            padding: 12px;
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            color: #f8fafc;
+            border-radius: 6px;
+            outline: none;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        input[type="text"] {
+            flex: 2;
+        }
+        input[type="date"] {
+            flex: 1;
+            color-scheme: dark; /* makes the calendar icon dark-mode friendly */
+        }
+        input:focus {
+            border-color: #0ea5e9;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            background-color: #0ea5e9;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-weight: 500;
+            border-radius: 6px;
+        }
+        button:hover {
+            background-color: #0284c7;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        li {
+            padding: 14px;
+            background: #334155;
+            border: 1px solid #475569;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #f8fafc;
+        }
+        .task-details {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .deadline-badge {
+            font-size: 12px;
+            color: #94a3b8;
+            background-color: #0f172a;
+            padding: 2px 8px;
+            border-radius: 4px;
+            width: fit-content;
+        }
+        .inline-edit-group {
+            display: flex;
+            gap: 8px;
+            width: 70%;
+        }
+        .edit-input {
+            padding: 6px;
+            font-size: 14px;
+            background-color: #0f172a;
+            border: 1px solid #0ea5e9;
+            color: #f8fafc;
+            border-radius: 4px;
+        }
+        .btn-danger { background-color: #ef4444; }
+        .btn-danger:hover { background-color: #dc2626; }
+        .btn-edit {
+            background-color: #475569;
+            color: #cbd5e1;
+            border: 1px solid #64748b;
+            margin-right: 5px;
+        }
+        .btn-edit:hover {
+            background-color: #64748b;
+            color: #fff;
+        }
+        .btn-save {
+            background-color: #f59e0b;
+            color: #0f172a;
+            margin-right: 5px;
+            font-weight: 600;
+        }
+        .btn-save:hover { background-color: #d97706; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>My Task Manager</h2>
+    
+    <div class="input-group">
+        <input type="text" id="item-input" placeholder="Add a new task...">
+        <input type="date" id="deadline-input">
+        <button id="add-btn">Add</button>
+    </div>
+
+    <ul id="items-list"></ul>
+</div>
+
+<script>
+    const API_URL = '/api/items';
+    const itemInput = document.getElementById('item-input');
+    const deadlineInput = document.getElementById('deadline-input');
+    const addBtn = document.getElementById('add-btn');
+    const itemsList = document.getElementById('items-list');
+
+    // 1. READ: Load all items with deadlines
+    async function fetchItems() {
+        try {
+            const response = await fetch(API_URL);
+            const items = await response.json();
+            itemsList.innerHTML = '';
+            
+            items.forEach(item => {
+                const li = document.createElement('li');
+                li.id = `item-${item.id}`;
+                
+                // Display deadline if it exists
+                const deadlineText = item.deadline ? `📅 Due: ${item.deadline}` : 'No deadline';
+                
+                li.innerHTML = `
+                    <div class="task-details">
+                        <span class="task-text">${item.name}</span>
+                        <span class="deadline-badge">${deadlineText}</span>
+                    </div>
+                    <div>
+                        <button class="btn-edit" onclick="enableInlineEdit(${item.id}, '${item.name}', '${item.deadline || ''}')">Edit</button>
+                        <button class="btn-danger" onclick="deleteItem(${item.id})">Delete</button>
+                    </div>
+                `;
+                itemsList.appendChild(li);
+            });
+        } catch (error) {
+            console.error('Error fetching data:', error);
+        }
+    }
+
+    // 2. CREATE: Add a new item with its deadline
+    async function addItem() {
+        const taskName = itemInput.value.trim();
+        const taskDeadline = deadlineInput.value;
+        if (!taskName) return;
+
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: taskName, deadline: taskDeadline })
+            });
+            if (response.ok) {
+                itemInput.value = '';
+                deadlineInput.value = ''; // Reset date picker
+                fetchItems();
+            }
+        } catch (error) {
+            console.error('Error adding item:', error);
+        }
+    }
+
+    // Switch list item to show both name and date input fields inline
+    function enableInlineEdit(id, currentName, currentDeadline) {
+        const li = document.getElementById(`item-${id}`);
+        
+        li.innerHTML = `
+            <div class="inline-edit-group">
+                <input type="text" class="edit-input" id="input-name-${id}" value="${currentName}" style="flex: 2;">
+                <input type="date" class="edit-input" id="input-date-${id}" value="${currentDeadline}" style="flex: 1;">
+            </div>
+            <div>
+                <button class="btn-save" onclick="saveInlineEdit(${id})">Save</button>
+                <button class="btn-danger" onclick="fetchItems()">Cancel</button>
+            </div>
+        `;
+    }
+
+    // 3. UPDATE: Save the edited task name and deadline
+    async function saveInlineEdit(id) {
+        const newName = document.getElementById(`input-name-${id}`).value.trim();
+        const newDeadline = document.getElementById(`input-date-${id}`).value;
+        
+        if (!newName) return alert('Task name cannot be empty!');
+
+        try {
+            const response = await fetch(`${API_URL}/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName, deadline: newDeadline })
+            });
+            if (response.ok) {
+                fetchItems();
+            }
+        } catch (error) {
+            console.error('Error updating item:', error);
+        }
+    }
+
+    // 4. DELETE: Remove an item
+    async function deleteItem(id) {
+        try {
+            const response = await fetch(`${API_URL}/${id}`, {
+                method: 'DELETE'
+            });
+            if (response.ok) {
+                fetchItems();
+            }
+        } catch (error) {
+            console.error('Error deleting item:', error);
+        }
+    }
+
+    addBtn.addEventListener('click', addItem);
+    window.onload = fetchItems;
+</script>
+
+</body>
+</html>
